@@ -12,16 +12,6 @@ OP = {'+': operator.add, '-': operator.sub,
       '<=': operator.le, '>=': operator.ge, '=': operator.eq}
 
 
-def mk_env(pvars):
-    return {v : Int(v) for v in pvars}
-
-
-def upd(d, k, v):
-    d = d.copy()
-    d[k] = v
-    return d
-
-
 def verify(P, ast: Tree, Q, linv=None):
     """
     Verifies a Hoare triple {P} c {Q}
@@ -32,11 +22,9 @@ def verify(P, ast: Tree, Q, linv=None):
     it is not.
     """
     print(ast)
-    pvars = {term for term in ast.terminals if isinstance(term, str)}
-    env = mk_env(pvars)
-    post_condition = Q(env)
-    pre_condition = P(env)
-    P2 = weakest_precondition(ast, Q, linv)
+    env = {term: Int(term) for term in ast.terminals if isinstance(term, str)}
+    env[linv] = linv
+    P2 = weakest_precondition(ast, Q, env)
     implies, counter_example = check_implication(P, P2)
 
     if not implies:
