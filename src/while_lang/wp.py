@@ -3,8 +3,8 @@ from while_lang.find_counter_example import find_counter_example
 from while_lang.syntax import WhileParser
 from z3 import Int, ForAll, Implies, Not, And, Or, Solver, unsat, sat
 
-from while_lang.weakest_precondition import get_weakest_pre_condition
-from while_lang.utils import Environment, Property
+from while_lang.weakest_pre_condition import get_weakest_pre_condition
+from while_lang.utils import Environment, Property, init_env_from_ast
 
 
 def verify(pre_condition: Property, ast: Tree, post_condition: Property, loop_invariant: Property = None):
@@ -16,15 +16,15 @@ def verify(pre_condition: Property, ast: Tree, post_condition: Property, loop_in
     Also prints the counterexample (model) returned from Z3 in case
     it is not.
     """
-    print(ast)
-    env = {term: Int(term) for term in ast.terminals if isinstance(term, str)}
-    P2 = get_weakest_pre_condition(ast, post_condition, env)
-    counter_example = find_counter_example(pre_condition, P2, env)
+    env = init_env_from_ast(ast)
+    weakest_pre_condition = get_weakest_pre_condition(ast, post_condition, loop_invariant)
+
+    counter_example = find_counter_example(pre_condition, weakest_pre_condition, env)
     if counter_example is not None:
         print(counter_example)
         return False
+
     return True
-    # ...
 
 
 if __name__ == '__main__':

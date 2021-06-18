@@ -1,5 +1,5 @@
 import operator
-from typing import Dict, Callable, Set
+from typing import Dict, Callable, Set, Union
 
 from z3 import ArithRef, BoolRef, Int
 
@@ -11,7 +11,7 @@ OP = {'+': operator.add, '-': operator.sub,
       '<=': operator.le, '>=': operator.ge, '=': operator.eq}
 
 Environment = Dict[str, ArithRef]
-Property = Callable[[Dict[str, ArithRef]], BoolRef]
+Property = Callable[[Dict[str, ArithRef]], Union[BoolRef, bool]]
 
 
 def get_unique_variables(ast: Tree) -> Set[str]:
@@ -29,7 +29,7 @@ def update_environment(env: Environment, variable: str, expression: ArithRef):
     return env
 
 
-def tree_expr_to_z3_expr(expr_tree: Tree, env: Environment) -> ArithRef:
+def tree_expr_to_z3_expr(expr_tree: Tree, env: Environment) -> Union[ArithRef, BoolRef]:
     if expr_tree.root == "num":
         return expr_tree.terminals[0]
 

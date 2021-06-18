@@ -1,4 +1,4 @@
-from z3 import ForAll, Implies, Not, And, Or
+from z3 import ForAll, Implies, Not, And, Or, Int
 
 from adt.tree import Tree
 from while_lang.syntax import WhileParser
@@ -7,11 +7,9 @@ from while_lang.utils import Property, update_environment, init_env_from_ast, tr
 
 def get_weakest_pre_condition(ast: Tree, post_condition: Property, loop_invariant: Property = None) -> Property:
     if ast.root == "skip":
-        # TODO: check that skip works properly
         return post_condition
 
     elif ast.root == ":=":
-        # TODO: test that assignment works properly
         to_replace = ast.terminals[0]
         expr_tree = ast.subtrees[1]
 
@@ -19,35 +17,36 @@ def get_weakest_pre_condition(ast: Tree, post_condition: Property, loop_invarian
                                                              tree_expr_to_z3_expr(expr_tree, env)))
 
     elif ast.root == ";":
-        # TODO: test chaining commands works properly
         ast0 = ast.subtrees[0]
         ast1 = ast.subtrees[1]
         post_condition0 = get_weakest_pre_condition(ast1, post_condition, loop_invariant)
         return get_weakest_pre_condition(ast0, post_condition0, loop_invariant)
 
     elif ast.root == "if":
-        # TODO: test if works properly
         if_condition = ast.subtrees[0]
         true_ast = ast.subtrees[1]
         false_ast = ast.subtrees[2]
 
         return lambda env: Or(
             And(tree_expr_to_z3_expr(if_condition, env),
-                get_weakest_pre_condition(true_ast, post_condition, loop_invariant)),
+                get_weakest_pre_condition(true_ast, post_condition, loop_invariant)(env)),
             And(Not(tree_expr_to_z3_expr(if_condition, env)),
-                get_weakest_pre_condition(false_ast, post_condition, loop_invariant))
+                get_weakest_pre_condition(false_ast, post_condition, loop_invariant)(env))
         )
 
     elif ast.root == "while":
+        # TODO: do we have to be given a loop_invariant?
         assert loop_invariant is not None, "loop encountered, and no loop invariant provided."
-        # TODO: test while works properly
         loop_condition = ast.subtrees[0]
         loop_body = ast.subtrees[1]
 
         return lambda env: And(
             loop_invariant(env),
             ForAll(
-                list(env.values()),
+                # we do not put directly the values in the dict, since they could be expressions,
+                # and this is not valid input for ForAll()
+                # TODO - using the forall quantifier here reduces the counter example
+                [Int(var_str) for var_str in env.keys()],
                 And(
                     Implies(
                         And(loop_invariant(env), tree_expr_to_z3_expr(loop_condition, env)),

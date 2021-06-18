@@ -1,5 +1,5 @@
 import unittest
-from while_lang.weakest_precondition import get_weakest_pre_condition
+from while_lang.weakest_pre_condition import get_weakest_pre_condition
 from while_lang.utils import tree_expr_to_z3_expr
 from adt.tree import Tree
 from while_lang.syntax import WhileParser
