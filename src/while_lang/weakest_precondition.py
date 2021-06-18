@@ -1,61 +1,78 @@
-from collections import Callable
-from typing import Dict
+from z3 import ForAll, Implies, Not, And, Or
 
 from adt.tree import Tree
-from z3 import Int, ForAll, Implies, Not, And, Or, Solver, unsat, sat
-import operator
 from while_lang.syntax import WhileParser
-
-OP = {'+': operator.add, '-': operator.sub,
-      '*': operator.mul, '/': operator.floordiv,
-      '!=': operator.ne, '>': operator.gt, '<': operator.lt,
-      '<=': operator.le, '>=': operator.ge, '=': operator.eq}
+from while_lang.utils import Property, update_environment, init_env_from_ast, tree_expr_to_z3_expr
 
 
-def upd(d, k, v):
-    d = d.copy()
-    d[k] = v
-    return d
+def get_weakest_pre_condition(ast: Tree, post_condition: Property, loop_invariant: Property = None) -> Property:
+    if ast.root == "skip":
+        # TODO: check that skip works properly
+        return post_condition
+
+    elif ast.root == ":=":
+        # TODO: test that assignment works properly
+        to_replace = ast.terminals[0]
+        expr_tree = ast.subtrees[1]
+
+        return lambda env: post_condition(update_environment(env, to_replace,
+                                                             tree_expr_to_z3_expr(expr_tree, env)))
+
+    elif ast.root == ";":
+        # TODO: test chaining commands works properly
+        ast0 = ast.subtrees[0]
+        ast1 = ast.subtrees[1]
+        post_condition0 = get_weakest_pre_condition(ast1, post_condition, loop_invariant)
+        return get_weakest_pre_condition(ast0, post_condition0, loop_invariant)
+
+    elif ast.root == "if":
+        # TODO: test if works properly
+        if_condition = ast.subtrees[0]
+        true_ast = ast.subtrees[1]
+        false_ast = ast.subtrees[2]
+
+        return lambda env: Or(
+            And(tree_expr_to_z3_expr(if_condition, env),
+                get_weakest_pre_condition(true_ast, post_condition, loop_invariant)),
+            And(Not(tree_expr_to_z3_expr(if_condition, env)),
+                get_weakest_pre_condition(false_ast, post_condition, loop_invariant))
+        )
+
+    elif ast.root == "while":
+        assert loop_invariant is not None, "loop encountered, and no loop invariant provided."
+        # TODO: test while works properly
+        loop_condition = ast.subtrees[0]
+        loop_body = ast.subtrees[1]
+
+        return lambda env: And(
+            loop_invariant(env),
+            ForAll(
+                list(env.values()),
+                And(
+                    Implies(
+                        And(loop_invariant(env), tree_expr_to_z3_expr(loop_condition, env)),
+                        get_weakest_pre_condition(loop_body, loop_invariant)(env)
+                    ),
+                    Implies(
+                        And(loop_invariant(env), Not(tree_expr_to_z3_expr(loop_condition, env))),
+                        post_condition(env)
+                    )
+                )
+            )
+        )
 
 
-def parse_expr(expr: Tree, env):
-    if expr.root == "num":
-        return expr.terminals[0]
-    elif expr.root == "id":
-        return env[expr.terminals[0]]
-    return OP[expr.root](parse_expr(expr.subtrees[0], env),
-                         parse_expr(expr.subtrees[1], env))
-
-
-def weakest_precondition(c: Tree, Q, linv):
-    # should not be bool, but a formula in z3 -NOT BOOL!!
-    if c.root == "skip":
-        return Q
-    elif c.root == ":=":
-        to_replace = c.terminals[0]
-        return lambda e: Q(upd(e, to_replace, parse_expr(c.subtrees[1], e)))
-    elif c.root == ";":
-        Q2 = weakest_precondition(c.subtrees[1], Q, linv)
-        return weakest_precondition(c.subtrees[0], Q2, linv)
-    elif c.root == "if":
-        then_clause, else_clause = c.subtrees[1], c.subtrees[2]
-        return lambda e: Or(And(parse_expr(c.subtrees[0], e), weakest_precondition(then_clause, Q, e)),
-                            And(Not(parse_expr(c.subtrees[0], e)), weakest_precondition(else_clause, Q, e)))
-    elif c.root == "while":
-        body = c.subtrees[1]
-        P = linv
-        return lambda e: And(P(e), ForAll([e[k] for k in e.keys()],
-                                          And(Implies(And(P(e),parse_expr(c.subtrees[0], e)),
-                                                      weakest_precondition(body, P, e)(e)),
-                                              Implies(And(P(e), Not(parse_expr(c.subtrees[0], e))), Q(e)))))
-
-
-if __name__ == "__main__":
+def example():
     program = "a := b ; while i < n do ( a := a + 1 ; b := b + 1 )"
-    P = lambda _: True
-    Q = lambda d: d['a'] == d['b']
-    linv = lambda d: d['a'] == d['b']
+    pre_condition = lambda _: True
+    post_condition = lambda d: d['a'] == d['b']
+    loop_invariant = lambda d: d['a'] == d['b']
     ast = WhileParser()(program)
-    env = {term: Int(term) for term in ast.terminals if isinstance(term, str)}
-    wp = weakest_precondition(ast, Q, linv)(env)
-    print(wp)
+    env = init_env_from_ast(ast)
+    weakest_pre_condition = get_weakest_pre_condition(ast, post_condition, loop_invariant)
+    weakest_pre_condition_formula = weakest_pre_condition(env)
+    print(weakest_pre_condition_formula)
+
+
+if __name__ == '__main__':
+    example()
